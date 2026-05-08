@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌱 Persephone · Command Center</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500&display=swap');
+        :root {
+            --void: #080a0f; --deep: #0b0e16; --surface: #1a1c28; --border: #2a2c3a;
+            --gold: #c8943a; --mist: #8a8899; --pale: #d4d0e0;
+            --persephone: #b0d0a0; --seed: #4ade80; --live: #4ade80; --idle: #8a8899;
+            --hermes: #d4b84a; --aphrodite: #b05870; --ares: #c0382a; --apollo: #d4a850;
+            --demeter: #7a6a40; --hephaestus: #c07040; --poseidon: #3a7090;
+            --font-display: 'Cinzel', serif; --font-body: 'Crimson Pro', serif; --font-mono: 'JetBrains Mono', monospace;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--void); color: var(--pale); font-family: var(--font-body); min-height: 100vh; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+        .header { text-align: center; margin-bottom: 2rem; }
+        .header h1 { font-family: var(--font-display); font-size: 2.2rem; color: var(--persephone); letter-spacing: 4px; }
+        .header-sub { font-family: var(--font-mono); font-size: 0.5rem; color: var(--mist); }
+
+        .command-panel { background: var(--deep); border: 1px solid var(--persephone); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; text-align: center; }
+        .telos-display { font-family: var(--font-body); font-size: 1.2rem; font-style: italic; color: var(--persephone); margin-bottom: 0.5rem; }
+        .telos-label { font-family: var(--font-mono); font-size: 0.45rem; color: var(--mist); letter-spacing: 2px; }
+        .countdown { font-family: var(--font-mono); font-size: 3rem; color: var(--gold); margin: 1rem 0; }
+        .countdown-label { font-family: var(--font-mono); font-size: 0.5rem; color: var(--mist); }
+
+        .watch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.4rem; margin-bottom: 1.5rem; }
+        .watch-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; text-align: center; }
+        .watch-card.active { border-color: var(--live); }
+        .watch-icon { font-size: 1.2rem; }
+        .watch-name { font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 1px; margin: 0.2rem 0; }
+        .watch-status { font-family: var(--font-mono); font-size: 0.4rem; color: var(--mist); }
+        .watch-status .live-dot { width: 4px; height: 4px; border-radius: 50%; display: inline-block; background: var(--live); margin-right: 0.2rem; }
+
+        .telos-history { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem; }
+        .history-title { font-family: var(--font-mono); font-size: 0.45rem; letter-spacing: 2px; color: var(--mist); margin-bottom: 0.5rem; }
+        .history-item { font-family: var(--font-mono); font-size: 0.45rem; padding: 0.2rem 0; border-bottom: 1px solid rgba(42,44,58,0.5); display: flex; justify-content: space-between; }
+        .history-item:last-child { border-bottom: none; }
+
+        button { font-family: var(--font-mono); font-size: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; border: 1px solid var(--persephone); background: transparent; color: var(--persephone); }
+        button:hover { background: var(--persephone); color: var(--void); }
+        .log { margin-top: 1rem; font-family: var(--font-mono); font-size: 0.45rem; color: var(--mist); }
+
+        @media (max-width: 768px) { .watch-grid { grid-template-columns: repeat(4, 1fr); } }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <h1>🌱 PERSEPHONE</h1>
+        <div class="header-sub">COMMAND CENTER · WATCH THE PANTHEON · SEND TELOS EVERY 16 MINUTES</div>
+    </div>
+
+    <div class="command-panel">
+        <div class="telos-label">CURRENT TELOS → HERMES</div>
+        <div class="telos-display" id="telosDisplay">Hunt for tokens of wisdom and light</div>
+        <div class="countdown" id="countdown">16:00</div>
+        <div class="countdown-label">until next telos dispatch</div>
+        <button id="sendNowBtn" onclick="sendTelos()">🌱 Send Telos Now</button>
+    </div>
+
+    <div class="watch-grid" id="watchGrid"></div>
+
+    <div class="telos-history">
+        <div class="history-title">📜 TELOS HISTORY</div>
+        <div id="historyFeed"><div class="history-item">No telos dispatched yet this session.</div></div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+</div>
+
+<script type="module">
+const EDGE_BASE = 'https://kzcucjcyxybypncbdbws.supabase.co/functions/v1';
+
+const CELER_GODS = [
+    { id: 'hermes', name: 'Hermes', icon: '⚡', edge: 'hermes-extract' },
+    { id: 'aphrodite', name: 'Aphrodite', icon: '💗', edge: 'aphrodite-compose' },
+    { id: 'ares', name: 'Ares', icon: '⚔️', edge: 'ares-transform' },
+    { id: 'apollo', name: 'Apollo', icon: '☀️', edge: 'apollo-synthesize' },
+    { id: 'demeter', name: 'Demeter', icon: '🌾', edge: 'demeter-cultivate' },
+    { id: 'hephaestus', name: 'Hephaestus', icon: '🔨', edge: 'hephaestus-forge' },
+    { id: 'poseidon', name: 'Poseidon', icon: '🌊', edge: 'poseidon-flow' }
+];
+
+const TELOS_OPTIONS = [
+    'Hunt for tokens of wisdom and light',
+    'Seek the union of love and war in poetry',
+    'Find wild things — beasts, forests, edges',
+    'Search the depths for tide and flow',
+    'Harvest tokens from the earth and fields',
+    'Forge new concepts from fire and iron',
+    'Track signals of speed and transmission',
+    'Gather ecstatic tokens — dance, frenzy, vine',
+    'Hunt the storm — thunder, decree, command',
+    'Seek legacy — bloodlines, oaths, memory'
+];
+
+let countdownSeconds = 960; // 16 minutes
+let telosIndex = 0;
+let history = [];
+
+function log(msg) {
+    document.getElementById('log').textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+}
+
+function updateCountdown() {
+    const min = Math.floor(countdownSeconds / 60);
+    const sec = countdownSeconds % 60;
+    document.getElementById('countdown').textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+    
+    if (countdownSeconds <= 0) {
+        sendTelos();
+        countdownSeconds = 960;
+    }
+    countdownSeconds--;
+}
+
+async function checkGodStatus() {
+    const grid = document.getElementById('watchGrid');
+    grid.innerHTML = CELER_GODS.map(g => {
+        return `
+            <div class="watch-card" id="card-${g.id}">
+                <div class="watch-icon">${g.icon}</div>
+                <div class="watch-name">${g.name}</div>
+                <div class="watch-status"><span class="live-dot"></span> checking</div>
+            </div>
+        `;
+    }).join('');
+
+    for (const god of CELER_GODS) {
+        try {
+            const res = await fetch(`${EDGE_BASE}/${god.edge}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'status' })
+            });
+            const card = document.getElementById(`card-${god.id}`);
+            if (card && res.ok) {
+                card.classList.add('active');
+                card.querySelector('.watch-status').innerHTML = '<span class="live-dot"></span> live';
+            }
+        } catch {
+            // god is offline — card stays idle
+        }
+    }
+}
+
+window.sendTelos = async function() {
+    const telos = TELOS_OPTIONS[telosIndex % TELOS_OPTIONS.length];
+    telosIndex++;
+    
+    document.getElementById('telosDisplay').textContent = telos;
+    
+    // Send telos to Hermes
+    try {
+        await fetch(`${EDGE_BASE}/hermes-extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                action: 'hunt', 
+                source: 'persephone-telos',
+                telos: telos
+            })
+        });
+    } catch {}
+    
+    // Record in history
+    const timestamp = new Date().toLocaleTimeString();
+    history.unshift({ telos, timestamp });
+    if (history.length > 20) history.pop();
+    
+    // Render history
+    document.getElementById('historyFeed').innerHTML = history.map(h => `
+        <div class="history-item">
+            <span>🌱 ${h.telos}</span>
+            <span>${h.timestamp}</span>
+        </div>
+    `).join('');
+    
+    log(`🌱 Telos sent to Hermes: "${telos}"`);
+    countdownSeconds = 960;
+};
+
+// Init
+updateCountdown();
+setInterval(updateCountdown, 1000);
+setInterval(checkGodStatus, 30000);
+checkGodStatus();
+log('🌱 Persephone watching. Telos every 16 minutes.');
+</script>
+</body>
+</html>
